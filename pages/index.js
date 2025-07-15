@@ -95,11 +95,14 @@ export default function ObjectDetectionApp() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/health`);
       if (response.ok) {
-        setApiStatus('connected');
+        const data = await response.json();
+        console.log('API Health:', data);
+        setApiStatus(data.fallback_mode ? 'fallback' : 'connected');
       } else {
         setApiStatus('error');
       }
     } catch (error) {
+      console.error('API Health Check Error:', error);
       setApiStatus('error');
     }
   };
@@ -463,18 +466,22 @@ export default function ObjectDetectionApp() {
           <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
             apiStatus === 'connected' 
               ? 'bg-green-100 text-green-800' 
+              : apiStatus === 'fallback' 
+              ? 'bg-yellow-100 text-yellow-800' 
               : apiStatus === 'error' 
               ? 'bg-red-100 text-red-800' 
-              : 'bg-yellow-100 text-yellow-800'
+              : 'bg-blue-100 text-blue-800'
           }`}>
             <div className={`w-2 h-2 rounded-full ${
               apiStatus === 'connected' 
-                ? 'bg-green-500' 
+                ? 'bg-green-500 animate-pulse' 
+                : apiStatus === 'fallback' 
+                ? 'bg-yellow-500 animate-pulse' 
                 : apiStatus === 'error' 
                 ? 'bg-red-500' 
-                : 'bg-yellow-500'
+                : 'bg-blue-500 animate-pulse'
             }`}></div>
-            API Status: {apiStatus === 'connected' ? 'Connected' : apiStatus === 'error' ? 'Disconnected' : 'Checking...'}
+            API Status: {apiStatus === 'connected' ? 'YOLOv8 Active' : apiStatus === 'fallback' ? 'Fallback Mode' : apiStatus === 'error' ? 'Disconnected' : 'Checking...'}
           </div>
           
           <div className="flex justify-center gap-4 mb-8">
@@ -517,15 +524,15 @@ export default function ObjectDetectionApp() {
                 <div className="flex gap-2">
                   <button
                     onClick={startCamera}
-                    disabled={isRunning || isProcessing || apiStatus !== 'connected'}
+                    disabled={isRunning || isProcessing || apiStatus === 'error'}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                      isRunning || isProcessing || apiStatus !== 'connected' 
+                      isRunning || isProcessing || apiStatus === 'error' 
                         ? `${darkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'}` 
                         : 'bg-blue-600 text-white hover:bg-blue-700 transform hover:scale-105'
                     }`}
                   >
                     <Camera className={`w-4 h-4 ${isProcessing ? 'animate-pulse' : ''}`} />
-                    {isRunning ? 'Running' : isProcessing ? 'Starting...' : apiStatus !== 'connected' ? 'API Offline' : 'Start Camera'}
+                    {isRunning ? 'Running' : isProcessing ? 'Starting...' : apiStatus === 'error' ? 'API Offline' : 'Start Camera'}
                   </button>
                   
                   <button
