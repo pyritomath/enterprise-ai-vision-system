@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
-import { Camera, Upload, Pause, RotateCcw, Download, Settings, TrendingUp, Target, Activity, Eye, Sun, Moon } from 'lucide-react';
+import { Camera, Upload, Pause, RotateCcw, Download, Settings, TrendingUp, Target, Activity, Eye, Sun, Moon, AlertTriangle, DollarSign, BarChart } from 'lucide-react';
 
 export default function ObjectDetectionApp() {
   const [isRunning, setIsRunning] = useState(false);
@@ -8,12 +8,17 @@ export default function ObjectDetectionApp() {
   const [currentImage, setCurrentImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [apiStatus, setApiStatus] = useState('checking');
+  const [businessAlerts, setBusinessAlerts] = useState([]);
+  const [modelInfo, setModelInfo] = useState(null);
   const [stats, setStats] = useState({
     totalDetections: 0,
     avgConfidence: 0,
     processingTime: 0,
     fps: 0,
-    sessionTime: 0
+    sessionTime: 0,
+    systemStability: 0,
+    detectionRate: 0
   });
   const [settings, setSettings] = useState({
     confidence: 0.5,
@@ -21,6 +26,8 @@ export default function ObjectDetectionApp() {
     enableAnalytics: true,
     enhancedVisualization: true
   });
+  const [performanceHistory, setPerformanceHistory] = useState([]);
+  const [businessMetrics, setBusinessMetrics] = useState(null);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -59,6 +66,8 @@ export default function ObjectDetectionApp() {
     }
   };
 
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
   const currentIndustry = industryConfigs[settings.industry];
 
   useEffect(() => {
@@ -75,6 +84,37 @@ export default function ObjectDetectionApp() {
 
     return () => clearInterval(interval);
   }, [isRunning]);
+
+  // Check API status on component mount
+  useEffect(() => {
+    checkApiStatus();
+    loadModelInfo();
+  }, []);
+
+  const checkApiStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`);
+      if (response.ok) {
+        setApiStatus('connected');
+      } else {
+        setApiStatus('error');
+      }
+    } catch (error) {
+      setApiStatus('error');
+    }
+  };
+
+  const loadModelInfo = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/model/info`);
+      if (response.ok) {
+        const info = await response.json();
+        setModelInfo(info);
+      }
+    } catch (error) {
+      console.error('Failed to load model info:', error);
+    }
+  };
 
   const startCamera = async () => {
     try {
@@ -180,39 +220,49 @@ export default function ObjectDetectionApp() {
   };
 
   const performObjectDetection = async (canvas) => {
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-    const detections = [];
-    
-    // Simulate more realistic object detection based on image analysis
-    const detectionCount = Math.floor(Math.random() * 3) + 1;
-    
-    for (let i = 0; i < detectionCount; i++) {
-      const objects = currentIndustry.objects;
-      const randomObject = objects[Math.floor(Math.random() * objects.length)];
-      const confidence = 0.6 + Math.random() * 0.35;
+    try {
+      // Convert canvas to base64
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
       
-      // More realistic bounding box positioning
-      const width = 60 + Math.random() * 150;
-      const height = 50 + Math.random() * 120;
-      const x = Math.random() * (canvas.width - width);
-      const y = Math.random() * (canvas.height - height);
-      
-      // Skip if confidence is too low
-      if (confidence < settings.confidence) continue;
-      
-      detections.push({
-        id: Date.now() + i,
-        class: randomObject,
-        confidence: confidence,
-        bbox: { x, y, width, height },
-        priority: confidence > 0.85 ? 'high' : confidence > 0.7 ? 'medium' : 'low',
-        timestamp: Date.now()
+      const response = await fetch(`${API_BASE_URL}/detect/base64`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: imageData,
+          confidence: settings.confidence,
+          industry: settings.industry
+        })
       });
+      
+      if (!response.ok) {
+        throw new Error('API request failed');
+      }
+      
+      const result = await response.json();
+      
+      // Update performance metrics
+      if (result.performance) {
+        setPerformanceHistory(prev => [...prev.slice(-99), result.performance]);
+        setStats(prev => ({
+          ...prev,
+          processingTime: result.performance.total_time * 1000,
+          fps: result.performance.processing_fps
+        }));
+      }
+      
+      // Update business alerts
+      if (result.business_alerts) {
+        setBusinessAlerts(prev => [...prev.slice(-19), ...result.business_alerts]);
+      }
+      
+      return result.detections || [];
+      
+    } catch (error) {
+      console.error('Detection API error:', error);
+      return [];
     }
-    
-    return detections;
   };
 
   const drawDetections = (ctx, detections) => {
@@ -285,27 +335,63 @@ export default function ObjectDetectionApp() {
     }));
   };
 
-  const handleFileUpload = (event) => {
+  const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
+      setIsProcessing(true);
+      
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('confidence', settings.confidence);
+        formData.append('industry', settings.industry);
+        
+        const response = await fetch(`${API_BASE_URL}/detect`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
+        
+        const result = await response.json();
+        
+        // Display the annotated image
+        if (result.annotated_image) {
           const canvas = canvasRef.current;
           const ctx = canvas.getContext('2d');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          
-          performObjectDetection(canvas).then(detections => {
-            drawDetections(ctx, detections);
-            updateStats(detections, 100);
-          });
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+          const img = new Image();
+          img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+          };
+          img.src = `data:image/jpeg;base64,${result.annotated_image}`;
+        }
+        
+        // Update detections and stats
+        if (result.detections) {
+          setDetections(result.detections);
+          updateStats(result.detections, result.performance?.total_time || 0);
+        }
+        
+        // Update business alerts
+        if (result.business_alerts) {
+          setBusinessAlerts(prev => [...prev.slice(-19), ...result.business_alerts]);
+        }
+        
+        // Update performance history
+        if (result.performance) {
+          setPerformanceHistory(prev => [...prev.slice(-99), result.performance]);
+        }
+        
+      } catch (error) {
+        console.error('File upload error:', error);
+        alert('Failed to process image. Please try again.');
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -313,6 +399,26 @@ export default function ObjectDetectionApp() {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const calculateBusinessMetrics = () => {
+    if (!detections.length) return null;
+    
+    const uniqueObjects = new Set(detections.map(d => d.class)).size;
+    const totalValue = detections.reduce((sum, d) => {
+      return sum + (typeof d.revenue_value === 'number' ? d.revenue_value : 0);
+    }, 0);
+    
+    const avgConfidence = detections.reduce((sum, d) => sum + d.confidence, 0) / detections.length;
+    const highConfidenceCount = detections.filter(d => d.confidence > 0.8).length;
+    
+    return {
+      totalValue,
+      uniqueObjects,
+      avgConfidence,
+      highConfidenceRatio: highConfidenceCount / detections.length,
+      detectionRate: detections.length / Math.max(stats.sessionTime, 1) * 60 // per minute
+    };
   };
 
   return (
@@ -334,7 +440,7 @@ export default function ObjectDetectionApp() {
                 ? 'from-gray-100 to-gray-300' 
                 : 'from-gray-900 to-gray-700'
             } bg-clip-text text-transparent`}>
-              AI Vision System
+              Enterprise AI Vision
             </h1>
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -347,11 +453,29 @@ export default function ObjectDetectionApp() {
               {darkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
             </button>
           </div>
-          <p className={`text-xl mb-8 ${
+          <p className={`text-xl mb-4 ${
             darkMode ? 'text-gray-300' : 'text-gray-600'
           }`}>
-            Professional computer vision platform with real-time object detection
+            Professional YOLOv8 computer vision with business intelligence
           </p>
+          
+          {/* API Status Indicator */}
+          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
+            apiStatus === 'connected' 
+              ? 'bg-green-100 text-green-800' 
+              : apiStatus === 'error' 
+              ? 'bg-red-100 text-red-800' 
+              : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              apiStatus === 'connected' 
+                ? 'bg-green-500' 
+                : apiStatus === 'error' 
+                ? 'bg-red-500' 
+                : 'bg-yellow-500'
+            }`}></div>
+            API Status: {apiStatus === 'connected' ? 'Connected' : apiStatus === 'error' ? 'Disconnected' : 'Checking...'}
+          </div>
           
           <div className="flex justify-center gap-4 mb-8">
             <div className={`px-4 py-2 rounded-full text-sm font-medium ${
@@ -362,6 +486,11 @@ export default function ObjectDetectionApp() {
             <div className={`px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r ${currentIndustry.gradient} text-white`}>
               {currentIndustry.name}
             </div>
+            {modelInfo && (
+              <div className="px-4 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                YOLOv8 • {modelInfo.device.toUpperCase()} • {modelInfo.theoretical_max_fps} FPS
+              </div>
+            )}
           </div>
         </div>
 
@@ -388,15 +517,15 @@ export default function ObjectDetectionApp() {
                 <div className="flex gap-2">
                   <button
                     onClick={startCamera}
-                    disabled={isRunning || isProcessing}
+                    disabled={isRunning || isProcessing || apiStatus !== 'connected'}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                      isRunning || isProcessing 
+                      isRunning || isProcessing || apiStatus !== 'connected' 
                         ? `${darkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'}` 
                         : 'bg-blue-600 text-white hover:bg-blue-700 transform hover:scale-105'
                     }`}
                   >
                     <Camera className={`w-4 h-4 ${isProcessing ? 'animate-pulse' : ''}`} />
-                    {isRunning ? 'Running' : isProcessing ? 'Starting...' : 'Start Camera'}
+                    {isRunning ? 'Running' : isProcessing ? 'Starting...' : apiStatus !== 'connected' ? 'API Offline' : 'Start Camera'}
                   </button>
                   
                   <button
@@ -490,6 +619,12 @@ export default function ObjectDetectionApp() {
                       <option key={key} value={key}>{config.name}</option>
                     ))}
                   </select>
+                  
+                  <div className={`mt-2 text-xs ${
+                    darkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    Objects: {currentIndustry.objects.slice(0, 3).join(', ')}...
+                  </div>
                 </div>
 
                 <div>
@@ -589,17 +724,118 @@ export default function ObjectDetectionApp() {
                 
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {detections.slice(-10).map((detection, index) => (
-                    <div key={detection.id} className={`flex items-center justify-between p-3 rounded-lg transition-all duration-300 ${
+                    <div key={detection.id || index} className={`flex items-center justify-between p-3 rounded-lg transition-all duration-300 ${
                       darkMode ? 'bg-gray-700/50 border border-gray-600' : 'bg-gray-50'
                     }`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-sm font-medium ${
+                          darkMode ? 'text-gray-200' : 'text-gray-900'
+                        }`}>{detection.class}</span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          detection.priority === 'high' ? 'bg-green-100 text-green-800' :
+                          detection.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>{detection.priority}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${
+                          darkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          {typeof detection.revenue_value === 'number' ? `$${detection.revenue_value}` : detection.revenue_value}
+                        </span>
+                        <span className={`text-sm px-2 py-1 rounded-full ${
+                          detection.confidence > 0.8 ? 'bg-green-100 text-green-800' :
+                          detection.confidence > 0.6 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>{(detection.confidence * 100).toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Business Intelligence Panel */}
+            {calculateBusinessMetrics() && (
+              <div className={`backdrop-blur-sm rounded-2xl shadow-2xl p-6 ${
+                darkMode 
+                  ? 'bg-gray-800/90 border border-gray-700' 
+                  : 'bg-white/80'
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <DollarSign className="w-5 h-5 text-green-600" />
+                  <h3 className={`text-lg font-bold ${
+                    darkMode ? 'text-gray-100' : 'text-gray-900'
+                  }`}>Business Intelligence</h3>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className={`p-3 rounded-lg ${
+                    darkMode ? 'bg-gray-700/50' : 'bg-green-50'
+                  }`}>
+                    <div className="text-2xl font-bold text-green-600">
+                      ${calculateBusinessMetrics().totalValue.toFixed(0)}
+                    </div>
+                    <div className={`text-sm ${
+                      darkMode ? 'text-gray-300' : 'text-gray-600'
+                    }`}>Session Value</div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`p-2 rounded-lg text-center ${
+                      darkMode ? 'bg-gray-700/50' : 'bg-blue-50'
+                    }`}>
+                      <div className="text-lg font-bold text-blue-600">
+                        {calculateBusinessMetrics().uniqueObjects}
+                      </div>
+                      <div className={`text-xs ${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>Object Types</div>
+                    </div>
+                    <div className={`p-2 rounded-lg text-center ${
+                      darkMode ? 'bg-gray-700/50' : 'bg-purple-50'
+                    }`}>
+                      <div className="text-lg font-bold text-purple-600">
+                        {calculateBusinessMetrics().detectionRate.toFixed(1)}
+                      </div>
+                      <div className={`text-xs ${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>Objects/min</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Business Alerts */}
+            {businessAlerts.length > 0 && (
+              <div className={`backdrop-blur-sm rounded-2xl shadow-2xl p-6 ${
+                darkMode 
+                  ? 'bg-gray-800/90 border border-gray-700' 
+                  : 'bg-white/80'
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  <h3 className={`text-lg font-bold ${
+                    darkMode ? 'text-gray-100' : 'text-gray-900'
+                  }`}>Business Alerts</h3>
+                </div>
+                
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {businessAlerts.slice(-5).map((alert, index) => (
+                    <div key={index} className={`flex items-center justify-between p-2 rounded-lg ${
+                      darkMode ? 'bg-orange-900/20 border border-orange-700' : 'bg-orange-50 border border-orange-200'
+                    }`}>
                       <span className={`text-sm font-medium ${
-                        darkMode ? 'text-gray-200' : 'text-gray-900'
-                      }`}>{detection.class}</span>
-                      <span className={`text-sm px-2 py-1 rounded-full ${
-                        detection.priority === 'high' ? 'bg-green-100 text-green-800' :
-                        detection.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>{(detection.confidence * 100).toFixed(1)}%</span>
+                        darkMode ? 'text-orange-200' : 'text-orange-800'
+                      }`}>
+                        {alert.class} detected
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        darkMode ? 'bg-orange-800 text-orange-200' : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {(alert.confidence * 100).toFixed(1)}%
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -613,18 +849,36 @@ export default function ObjectDetectionApp() {
             ? 'bg-gray-800/90 border border-gray-700 text-gray-100' 
             : 'bg-gray-900 text-white'
         }`}>
-          <h3 className="text-2xl font-bold mb-4">Professional AI Vision System</h3>
+          <h3 className="text-2xl font-bold mb-4">Enterprise AI Vision System</h3>
           <p className={`mb-6 ${
             darkMode ? 'text-gray-300' : 'text-gray-300'
           }`}>
-            Enterprise-grade computer vision with real-time processing and analytics
+            YOLOv8 computer vision with FastAPI backend and business intelligence
           </p>
-          <div className="flex justify-center gap-8 text-sm">
-            <span className="px-3 py-1 bg-blue-600 rounded-full">React & Next.js</span>
-            <span className="px-3 py-1 bg-green-600 rounded-full">WebRTC Camera</span>
-            <span className="px-3 py-1 bg-purple-600 rounded-full">Real-time Processing</span>
+          <div className="flex justify-center gap-4 text-sm flex-wrap">
+            <span className="px-3 py-1 bg-blue-600 rounded-full">Next.js Frontend</span>
+            <span className="px-3 py-1 bg-green-600 rounded-full">FastAPI Backend</span>
+            <span className="px-3 py-1 bg-purple-600 rounded-full">YOLOv8 Detection</span>
             <span className="px-3 py-1 bg-orange-600 rounded-full">Business Analytics</span>
+            <span className="px-3 py-1 bg-red-600 rounded-full">Real-time Processing</span>
           </div>
+          
+          {modelInfo && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-gray-800 rounded-lg">
+                <div className="text-lg font-bold text-blue-400">{modelInfo.total_parameters?.toLocaleString()}</div>
+                <div className="text-sm text-gray-300">Parameters</div>
+              </div>
+              <div className="p-4 bg-gray-800 rounded-lg">
+                <div className="text-lg font-bold text-green-400">{modelInfo.model_size_mb} MB</div>
+                <div className="text-sm text-gray-300">Model Size</div>
+              </div>
+              <div className="p-4 bg-gray-800 rounded-lg">
+                <div className="text-lg font-bold text-purple-400">{modelInfo.num_classes}</div>
+                <div className="text-sm text-gray-300">Object Classes</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

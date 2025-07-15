@@ -1,50 +1,85 @@
-# AI Object Detection - Next.js
+# Enterprise AI Vision System
 
-## Quick Setup
+A professional computer vision platform combining **Next.js frontend** with **FastAPI + YOLOv8 backend** for enterprise-grade object detection with business intelligence.
 
-1. **Install dependencies**:
-```bash
-npm install
+## 🚀 Features
+
+- **Real YOLOv8 Object Detection** - Powered by Ultralytics YOLOv8
+- **Industry-Specific Configurations** - Retail, Security, Manufacturing, General
+- **Business Intelligence** - ROI calculations, revenue tracking, performance metrics
+- **Real-time Processing** - Live camera feed with instant detection
+- **Dark/Light Mode** - Professional UI with smooth transitions
+- **Performance Analytics** - Comprehensive metrics and monitoring
+- **Enterprise Ready** - Production-ready architecture
+
+## 🏗️ Architecture
+
+```
+Frontend (Next.js)     →     Backend (FastAPI)
+├── Camera Access           ├── YOLOv8 Model
+├── Dark/Light Mode         ├── Object Detection
+├── Business Intelligence   ├── Image Processing
+├── Real-time Stats        ├── Business Logic
+└── Industry Config        └── Performance Metrics
 ```
 
-2. **Run development**:
+## 🛠️ Setup & Installation
+
+### Backend Setup (Python FastAPI)
+
 ```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+### Frontend Setup (Next.js)
+
+```bash
+npm install
 npm run dev
 ```
 
-3. **Deploy to Vercel**:
+## 🚀 Deployment
+
+### Backend Deployment (Railway/Render):
+1. Connect GitHub repo
+2. Auto-deploy on push
+3. Set environment variables
+
+### Frontend Deployment (Vercel):
 ```bash
-npm run deploy
+npm run build
+vercel --prod
 ```
 
-## Features
+Set environment variable:
+```
+NEXT_PUBLIC_API_URL=https://your-backend-url.com
+```
 
-- Real-time camera object detection
-- Professional UI with stunning visuals
-- Industry-specific modes
-- Performance analytics
-- Export capabilities
-- Mobile responsive
+## 📊 Industry Configurations
 
-## Camera Access
+- **Retail Analytics** - Customer behavior, foot traffic
+- **Security & Surveillance** - Intrusion detection, threat assessment
+- **Manufacturing QC** - Quality control, defect detection
+- **General Purpose** - Multi-purpose object detection
 
-The app uses WebRTC for camera access. Camera permissions are required for live detection. Image upload works as fallback.
+## 🎨 Tech Stack
 
-## Files Created
+**Frontend:** Next.js 14, React 18, Tailwind CSS
+**Backend:** FastAPI, YOLOv8, OpenCV, PyTorch
+**Deployment:** Vercel + Railway/Render
 
-- `pages/index.js` - Main application
-- `pages/_app.js` - App configuration  
-- `styles/globals.css` - Global styles
-- `package.json` - Dependencies
-- `next.config.js` - Next.js config
-- `tailwind.config.js` - Tailwind config
-- `postcss.config.js` - PostCSS config
-- `vercel.json` - Vercel deployment
+## 📱 Usage
 
-## Deployment
+1. **Start Backend**: `uvicorn main:app --reload`
+2. **Start Frontend**: `npm run dev`
+3. **Select Industry**: Choose your use case
+4. **Configure Settings**: Adjust confidence threshold
+5. **Start Detection**: Upload image or use live camera
+6. **Monitor Analytics**: View business intelligence
 
-1. Push to GitHub
-2. Connect to Vercel
-3. Auto-deploy on commit
+---
 
-Your enhanced AI Object Detection app is ready! 🚀
+**Enterprise AI Vision System** - Professional computer vision for modern businesses.
