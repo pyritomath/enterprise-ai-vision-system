@@ -66,7 +66,7 @@ export default function ObjectDetectionApp() {
     }
   };
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
   const currentIndustry = industryConfigs[settings.industry];
 
@@ -93,7 +93,7 @@ export default function ObjectDetectionApp() {
 
   const checkApiStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/health`);
+      const response = await fetch(`${API_BASE_URL}/api/health`);
       if (response.ok) {
         setApiStatus('connected');
       } else {
@@ -106,7 +106,7 @@ export default function ObjectDetectionApp() {
 
   const loadModelInfo = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/model/info`);
+      const response = await fetch(`${API_BASE_URL}/api/model/info`);
       if (response.ok) {
         const info = await response.json();
         setModelInfo(info);
@@ -224,7 +224,7 @@ export default function ObjectDetectionApp() {
       // Convert canvas to base64
       const imageData = canvas.toDataURL('image/jpeg', 0.8);
       
-      const response = await fetch(`${API_BASE_URL}/detect/base64`, {
+      const response = await fetch(`${API_BASE_URL}/api/detect/base64`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -346,7 +346,7 @@ export default function ObjectDetectionApp() {
         formData.append('confidence', settings.confidence);
         formData.append('industry', settings.industry);
         
-        const response = await fetch(`${API_BASE_URL}/detect`, {
+        const response = await fetch(`${API_BASE_URL}/api/detect`, {
           method: 'POST',
           body: formData
         });
