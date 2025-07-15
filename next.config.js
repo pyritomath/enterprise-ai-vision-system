@@ -5,9 +5,6 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
-  // Enable static export for Vercel deployment
-  output: 'export',
-  trailingSlash: true,
   images: {
     unoptimized: true,
   },
